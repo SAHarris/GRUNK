@@ -1,0 +1,4 @@
+[Server]
+ip = 127.0.0.1
+port = 11434
+model = qwen-4b-zimage-hereticV2-q8.gguf

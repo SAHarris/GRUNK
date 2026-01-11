@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.env
+.venv
+npc_saves/
+config.conf
