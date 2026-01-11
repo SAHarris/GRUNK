@@ -56,42 +56,57 @@ class NPCEngine:
             json.dump(self.history, f, indent=2)
 
     def chat(self, user_input: str, temp: float = 0.8) -> str:
-        """Sends input to the RX 580 and gets a response."""
-        
-        # Add user input to history
+        # 1. Add user input to history (standard storage)
         self.history.append({"role": "user", "content": user_input})
 
+        # 2. CONSTRUCT THE RAW SCRIPT
+        # We manually build the string so we know exactly what the model sees.
+        # This bypasses the broken "Chat Template" on the server.
+        prompt_string = ""
+        
+        for msg in self.history:
+            if msg['role'] == 'user':
+                # Check if it's the very first instruction block
+                if msg == self.history[0]:
+                    prompt_string += f"System: {msg['content']}\n\n"
+                else:
+                    prompt_string += f"User: {msg['content']}\n"
+            elif msg['role'] == 'assistant':
+                prompt_string += f"{self.name}: {msg['content']}\n"
+        
+        # 3. Add the "Cue" for the NPC to speak
+        prompt_string += f"{self.name}:"
+
         try:
-            # DEBUG: Print what we are doing
-            print(f"\n[DEBUG] Sending to {self.name} (RX 580)...")
+            # DEBUG: Uncomment this to see the exact text sent to the GPU
+            # print(f"\n[DEBUG PROMPT]\n{prompt_string}\n[END PROMPT]")
+            # print(f"\n[DEBUG] Sending to {self.name} (RX 580)...")
             
-            response = self.client.chat.completions.create(
+            # 4. SEND RAW REQUEST
+            response = self.client.completions.create(
                 model=MODEL_ID,
-                messages=self.history,
+                prompt=prompt_string,
                 temperature=temp,
                 max_tokens=150,
-                # stop=["User:", "\nUser"] # Optional: Prevents model from talking for you
+                # CRITICAL: Tell the model when to stop talking!
+                stop=["User:", "System:", "\n\n"] 
             )
             
-            # DEBUG: Print raw response to catch 'invisible' text
-            # print(f"[DEBUG] RAW OBJECT: {response}") 
+            reply = response.choices[0].text.strip()
             
-            reply = response.choices[0].message.content
-            
-            # Safety check for empty responses
-            if not reply or reply.strip() == "":
-                print("[WARN] Received empty response from server.")
+            # Safety check
+            if not reply:
                 reply = "*Stares silently*"
 
-            # Add reply to history and save
+            # 5. Save result
             self.history.append({"role": "assistant", "content": reply})
             self.save_memory()
             
             return reply
 
         except Exception as e:
-            return f"[System Error: Connection to {SERVER_IP} failed. {e}]"
-
+            return f"[System Error: {e}]"
+        
     def clear_memory(self):
         """Wipes the NPC's mind for a fresh start."""
         if os.path.exists(self.save_file):
